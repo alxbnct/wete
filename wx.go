@@ -4,8 +4,15 @@ import (
 	"fmt"
 
 	"github.com/eatmoreapple/openwechat"
+	tg "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/skip2/go-qrcode"
 )
+
+func checkErr(err error) {
+	if err != nil {
+		fmt.Println(err)
+	}
+}
 
 func ConsoleQrCode(uuid string) {
 	q, _ := qrcode.New("https://login.weixin.qq.com/l/"+uuid, qrcode.Low)
@@ -25,12 +32,7 @@ func wxInit() (*openwechat.Bot, *openwechat.Self, error) {
 
 	// 获取登陆的用户
 	self, err := bot.GetCurrentUser()
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	// 阻塞主goroutine, 直到发生异常或者用户主动退出
-	//bot.Block()
+	checkErr(err)
 
 	return bot, self, err
 
@@ -39,31 +41,44 @@ func wxInit() (*openwechat.Bot, *openwechat.Self, error) {
 func wxGet() {
 
 	bot, self, err := wxInit()
-	if err != nil {
-		fmt.Println(err)
-	}
-	// 获取所有的好友
+	checkErr(err)
 	friends, err := self.Friends()
-	fmt.Println(friends, err)
-
-	// 获取所有的群组
-	groups, err := self.Groups()
-	fmt.Println(groups, err)
+	checkErr(err)
+	/* 	groups, err := self.Groups()
+	   	checkErr(err) */
 
 	bot.MessageHandler = func(msg *openwechat.Message) {
 		if msg.IsText() && len(msg.Content) != 0 {
-			/* msg.ReplyText("pong") */
-			/* fmt.Println(msg.Content) */
-			sender, err := msg.Sender()
+
+			fmt.Println(msg.Content)
+			bot, updates, err := tgInit()
 			if err != nil {
 				fmt.Println(err)
 			}
-			if sender.RemarkName == "neo" {
-				fmt.Println(msg.Content)
+
+			xx := tg.NewMessage(conf.Telegram.Id, msg.Content)
+			bot.Send(xx)
+
+			for update := range updates {
+				// ignore any non-Message Updates
+				if update.Message == nil {
+					continue
+				}
+
+				ok := friends.SearchByRemarkName(1, "neo")
+
+				if ok.Count() > 0 {
+					go wxSend(ok.First(), update.Message.Text)
+				}
+
 			}
 		}
 	}
 
 	// 阻塞主goroutine, 直到发生异常或者用户主动退出
 	bot.Block()
+}
+
+func wxSend(f *openwechat.Friend, msg string) {
+	f.SendText(msg)
 }
