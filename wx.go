@@ -48,9 +48,19 @@ func wxGet() {
 	   	checkErr(err) */
 
 	bot.MessageHandler = func(msg *openwechat.Message) {
-		if msg.IsText() && len(msg.Content) != 0 {
+		if msg.IsText() && msg.IsSendByFriend() && len(msg.Content) != 0 {
 
-			fmt.Println(msg.Content)
+			//fmt.Println(msg.Content)
+
+			sender, err := msg.Sender()
+			if err != nil {
+				fmt.Println(err)
+			}
+			if sender.RemarkName == "neo" {
+				fmt.Println(msg.Content)
+
+			}
+
 			bot, updates, err := tgInit()
 			if err != nil {
 				fmt.Println(err)
@@ -61,7 +71,7 @@ func wxGet() {
 
 			for update := range updates {
 				// ignore any non-Message Updates
-				if update.Message == nil {
+				if update.Message == nil && update.Message.Chat.ID != conf.Telegram.Id {
 					continue
 				}
 
@@ -81,4 +91,9 @@ func wxGet() {
 
 func wxSend(f *openwechat.Friend, msg string) {
 	f.SendText(msg)
+}
+
+type Mee struct {
+	ChatID             int64
+	SuperGroupUsername string
 }
