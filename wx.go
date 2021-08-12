@@ -3,40 +3,95 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
+	"net/url"
 	"sync/atomic"
 
+	"github.com/BurntSushi/toml"
 	"github.com/eatmoreapple/openwechat"
 	tg "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/skip2/go-qrcode"
+	"golang.org/x/net/proxy"
 )
+
+type (
+	Telegram struct {
+		Token string
+		Socks string
+		Id    int64
+		Debug bool
+	}
+
+	QQ struct {
+	}
+	Conf struct {
+		Telegram Telegram
+		QQ       QQ
+	}
+)
+
+var conf *Conf
+
+func init() {
+	if _, err := toml.DecodeFile("config/config.toml", &conf); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func ProxyNewBotApi(token string) (*tg.BotAPI, error) {
+	client := &http.Client{}
+	socks5 := "socks5://" + conf.Telegram.Socks
+	if len(socks5) > 0 {
+		tgProxyURL, err := url.Parse(socks5)
+		if err != nil {
+			log.Printf("Failed to parse proxy URL:%s\n", err)
+			return nil, err
+		}
+		tgDialer, err := proxy.FromURL(tgProxyURL, proxy.Direct)
+		if err != nil {
+			log.Printf("Failed to obtain proxy dialer: %s\n", err)
+		}
+		tgTransport := &http.Transport{
+			Dial: tgDialer.Dial,
+		}
+		client.Transport = tgTransport
+	}
+	return tg.NewBotAPIWithClient(token, client)
+}
 
 func ConsoleQrCode(uuid string) {
 	q, _ := qrcode.New("https://login.weixin.qq.com/l/"+uuid, qrcode.Low)
 	fmt.Println(q.ToString(true))
 }
 
+func GroupMessageHandler(c *openwechat.Message) (string, string, string) {
+	sender, _ := c.Sender()
+	senderUser := sender.NickName
+	SenderInGroup, _ := c.SenderInGroup()
+	return senderUser, SenderInGroup.NickName, c.Content
+}
+
 func start() {
-	bot := openwechat.DefaultBot()
+	wx := openwechat.DefaultBot()
 
 	var count int32
-	bot.GetMessageErrorHandler = func(err error) {
+	wx.GetMessageErrorHandler = func(err error) {
 		atomic.AddInt32(&count, 1)
 		if count == 3 {
-			bot.Logout()
+			wx.Logout()
 		}
 	}
 
-	bot.UUIDCallback = ConsoleQrCode
+	wx.UUIDCallback = ConsoleQrCode
 
 	// 创建热存储容器对象
 	reloadStorage := openwechat.NewJsonFileHotReloadStorage("storage.json")
 
 	// 执行热登录
-	bot.HotLogin(reloadStorage, true)
-	user, err := bot.GetCurrentUser()
+	wx.HotLogin(reloadStorage, true)
+	user, err := wx.GetCurrentUser()
 	if err != nil {
 		log.Println(err)
-		return
 	} else {
 		log.Println("当前登录用户：", user)
 	}
@@ -71,7 +126,19 @@ func start() {
 		log.Println("获取文件传输助手成功", fh.UserName, fh.RemarkName)
 	}
 
-	bott, updates, err := tgInit()
+	bot, err := ProxyNewBotApi(conf.Telegram.Token)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	bot.Debug = true
+
+	log.Printf("Authorized on account %s", bot.Self.UserName)
+
+	u := tg.NewUpdate(0)
+	u.Timeout = 60
+
+	updates, err := bot.GetUpdatesChan(u)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -82,26 +149,18 @@ func start() {
 			continue
 		}
 
-		bot.MessageHandler = func(msg *openwechat.Message) {
+		wx.MessageHandler = func(msg *openwechat.Message) {
 			if len(msg.Content) != 0 && msg.IsSendByGroup() {
-				a, b, c := TextMessageHandler(msg)
+				a, b, c := GroupMessageHandler(msg)
 				if a == "国光帮帮忙" {
 					log.Printf("[%v]%v: %v", a, b, c)
 					cc := fmt.Sprintf("[%v]%v: %v", a, b, c)
 					xx := tg.NewMessage(update.Message.Chat.ID, cc)
-					bott.Send(xx)
+					bot.Send(xx)
 				}
-
 			}
 		}
 	}
+	wx.Block()
 
-	bot.Block()
-}
-
-func TextMessageHandler(c *openwechat.Message) (string, string, string) {
-	sender, _ := c.Sender()
-	senderUser := sender.NickName
-	SenderInGroup, _ := c.SenderInGroup()
-	return senderUser, SenderInGroup.NickName, c.Content
 }
