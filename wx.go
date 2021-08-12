@@ -71,7 +71,12 @@ func GroupMessageHandler(c *openwechat.Message) (string, string, string) {
 	return senderUser, SenderInGroup.NickName, c.Content
 }
 
-func start() {
+func FriendMessageHandler(c *openwechat.Message) (string, string) {
+	sender, _ := c.Sender()
+	return sender.RemarkName, c.Content
+}
+
+func main() {
 	wx := openwechat.DefaultBot()
 
 	var count int32
@@ -144,23 +149,44 @@ func start() {
 	}
 
 	for update := range updates {
-		// ignore any non-Message Updates
 		if update.Message == nil {
 			continue
 		}
 
 		wx.MessageHandler = func(msg *openwechat.Message) {
-			if len(msg.Content) != 0 && msg.IsSendByGroup() {
+			if len(msg.Content) != 0 && msg.IsText() {
 				a, b, c := GroupMessageHandler(msg)
+				d, e := FriendMessageHandler(msg)
+				if a == "我不是鸽手" {
+					log.Printf("[%v]%v: %v", a, b, c)
+					cc := fmt.Sprintf("[%v]%v: %v", a, b, c)
+					xx := tg.NewMessage(update.Message.Chat.ID, cc)
+					bot.Send(xx)
+				}
+
 				if a == "国光帮帮忙" {
 					log.Printf("[%v]%v: %v", a, b, c)
 					cc := fmt.Sprintf("[%v]%v: %v", a, b, c)
 					xx := tg.NewMessage(update.Message.Chat.ID, cc)
 					bot.Send(xx)
 				}
+
+				if d == "xx" {
+					log.Printf("%v: %v", d, e)
+					cc := fmt.Sprintf("%v: %v", d, e)
+					xx := tg.NewMessage(update.Message.Chat.ID, cc)
+					bot.Send(xx)
+				}
+
+				if d == "neo" {
+					log.Printf("%v: %v", d, e)
+					cc := fmt.Sprintf("%v: %v", d, e)
+					xx := tg.NewMessage(update.Message.Chat.ID, cc)
+					bot.Send(xx)
+				}
+
 			}
 		}
 	}
 	wx.Block()
-
 }
