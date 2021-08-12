@@ -10,7 +10,7 @@ import (
 	"golang.org/x/net/proxy"
 )
 
-func NewBotProxyApi(token string) (*tg.BotAPI, error) {
+func ProxyNewBotApi(token string) (*tg.BotAPI, error) {
 	client := &http.Client{}
 	socks5 := "socks5://" + conf.Telegram.Socks
 	if len(socks5) > 0 {
@@ -32,7 +32,7 @@ func NewBotProxyApi(token string) (*tg.BotAPI, error) {
 }
 
 func tgInit() (*tg.BotAPI, tg.UpdatesChannel, error) {
-	bot, err := NewBotProxyApi(conf.Telegram.Token)
+	bot, err := ProxyNewBotApi(conf.Telegram.Token)
 	if err != nil {
 		log.Panic(err)
 	}
